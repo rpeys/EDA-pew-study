@@ -1,0 +1,857 @@
+---
+title: "“One Nation, Under God, Indivisible”?"
+subtitle: "An Analysis of the Social Values of America, 1987-2012 Broken Down across Time and Religion"
+author: "Daniel First, Rebecca Peyser, Karl Loic, Conrad De Peuter"
+date: "4/20/2017"
+runtime: shiny
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(foreign)
+library(choroplethr)
+
+#library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(viridis)
+library(choroplethrMaps)
+
+
+library(HH)
+library(shinyLikert)
+knitr::opts_chunk$set(echo = TRUE)
+
+# load data
+pew <- read.spss("1987-2012_Values_Merge/1987-2012 Values Merge public.sav", to.data.frame=TRUE)
+
+```
+
+# Introduction
+## Background
+
+For many years, Pew has been collecting data on people’s responses to prompts about social issues. As became clear from the 2016 election, we live in a surprisingly divided country. This inspired us to examine the values of America, how they changed over time, and how members of different religions respond differently to various social values.
+
+Pew put out a report detailing the takeaways of their analysis. We are interesting in re-analysing the dataset on which the Pew report was based. We want to specifically focus on religion and how citizens’ values, in each state on average, have changed over time.
+
+## Description of Data:
+The pew dataset contains 35578 survey responses (observations) to 152 questions on a diversity of topics (including but not limited to religion, social, race, politics and government). The survey was conducted across all 50 states between 1987 to 2012. 
+
+Our primary focus was on the religious, social and race-related responses. To achieve this we create a subset of the dataset that contained the same number of responses but only 11 of the 152 questions (variables). Four of the questions were related to race, five others to social values and the last, seeked to determine the political affiliation of the respondent. In each of these questions, respondents were given a prompt, such as “I think it is alright for blacks and whites to date each other,” and they were instructed to respond on a scale ranging from “Completely agree, agree, don’t know, disagree, completely disagree.” 
+
+We were also interested in seeing how these different views were reflected in different religious and age groups. So in addition to the 11 questions we included four other variables to our subset; the respondent's religion, their age and state of residence and the year in which the survey was conducted.
+
+The reader can find the datasets on this website: http://www.people-press.org/2012/04/15/1987-2012-values-survey-combined-dataset/. We chose to analyze the data Pew presented in 2012 because the dataset is more complete than the results Pew reported in 2014 or 2016.
+
+
+# Team
+- Conrad made the visualizations showing ideological changes state by state using choropleth maps.
+- Karl made exploratory graphs regarding race as well as the missing value graphs. He also wrote up the missing values section, as well as the data description section.
+- Rebecca created the Likert plots, showing the breakdown of responses by religion. She also contributed to the main analysis by writing up the results of her section.
+- Daniel made exploratory line graphs relating to how values have changed over time. He also performed the main analysis and wrote that, the executive summary, introduction, and conclusion.
+
+# Analysis of Data Quality
+
+Fortunately, the data provided by Pew is very high-quality. Data was already pre-coded into relevant categories, both demographic and in response to the questionnaire. 
+Consistency: on the one hand, the values in the data are provided consistently. For example, the responses to questions about political ideology consistently are rated on a scale from “Very Conservative” to “Very Liberal,” and checks revealed that none were miscoded. On the other hand, some years have far more data than others. For example, the number of responses in 1987 is around 4000, while the number of responses in 1994 is 1000. (See Graph, below)  
+Further, 5043 people were surveyed in multiple years, while 13248 were only surveyed during one year. For some purposes people bring to this dataset, this may make a difference, while for others, it would not make a difference. We visualize below.
+
+
+```{r}
+
+ggplot(data.frame(table(table(pew$respid)))) + geom_histogram(aes(x=Var1, y=Freq), stat="Identity") + xlab("Number of times surveyed") + ylab("Frequency") + ggtitle("Frequency of Repeated Respondents")
+
+```
+
+
+Here, we visualize the number of responses per year. It can be observed that there are far fewer responses between 1994 and 2002. 
+
+
+```{r}
+# how many people each year
+pew_by_year <- pew %>% group_by(year) %>% summarise(responses = n())
+
+# plot
+ggplot(pew_by_year, aes(x=year)) + geom_line(aes(y=responses)) + ggtitle("Number of responses each year") 
+
+
+```
+
+
+## Missing Values
+
+```{r}
+library('foreign')
+library(mi)
+library(extracat)
+# Relevant questions
+questions <- c('q10j', 'q10k', 'q10l', 'q10m', 'q16a', 'q16b', 'q16c', 'q16d', 'q16e', 'q16s', 'q16x', 'q16h', 'q16l', 'q16m', 'q16j')
+
+pew_sample <- pew[sample(1:nrow(pew), 2000, replace=FALSE),]
+
+# Missing values patterns
+visna(pew[questions], sort = 'b')
+
+```
+
+
+This visna plot displays the frequency of different patterns of missing information for questions we investigated in the data set. Only a minority of responses have missing values.
+
+
+Another strong aspect of this data set is how the dataset proportions mirror the United States in many ways. For example, the population of people surveyed generally correspond to total population.
+
+
+
+```{r}
+counts <- data.frame(table(pew$state)[order(table(pew$state), decreasing = TRUE)])
+
+counts$rev <- factor(counts$Var1, levels = counts$Var1)
+counts$rev <- factor(counts$Var1, levels = levels(counts$rev)[length(counts$Var1):1])
+
+ggplot(counts) + geom_bar(aes(x = rev, y = Freq), stat = 'identity') + 
+  coord_flip() +
+  ggtitle('Number of responses per state') +
+  theme(plot.title = element_text(size = 10))
+
+```
+
+
+This plot represents the number of responses to the survey for each state in decreasing order.
+
+Additionally, the breakdown of religions was fairly representative of the proportion of religious views of the population as a whole: 
+
+
+```{r}
+# plots for writeup
+by_religion <- data.frame(table(pew$relign)[order(table(pew$relign), decreasing = TRUE)])
+
+not_other <-by_religion$Var1  != "Other Religion"
+
+by_religion <- rbind(by_religion[not_other,], by_religion[by_religion$Var1  == "Other Religion",])
+
+# make V1 an ordered factor
+by_religion$V1 <- factor(by_religion$Var1, levels = by_religion$Var1)
+by_religion$V1 <- factor(by_religion$Var1, levels = levels(by_religion$V1)[length(by_religion$Var1):1])
+
+ggplot(by_religion) + geom_bar(aes(x=V1, y=Freq), stat='identity') + coord_flip() + ggtitle("Religions in Pew data") + xlab("Religion") + ylab("Count")
+
+
+```
+
+
+
+
+# Executive Summary
+
+In this study, we were centrally interested in examining how the data varies across two dimensions: time and religion. To examine how attitudes have changed over time, we used the Choropleth plots, which we will henceforth refer to as “map plots.” We examined, for each state, the average value of response to each prompt, and how it shifts over time. We then examined how different religions responded to the prompts. For the explorations of religion, we looked at how responses vary by religion and age of respondent.
+
+## I. How attitudes across the country have changed over time:
+On some questions people’s views have shifted, while on others they have remained relatively the same. We report some of the main findings here, by topic:
+
+##### Homosexuality: Prompt: "School boards ought to have the right to fire teachers who are known homosexuals"
+People’s attitude towards whether they are open to homosexual teachers has shifted significantly over time. In 1987, except the west coast and the northeast, the country generally agreed with the sentiment that “school boards ought to have the right to fire teachers who are known homosexuals.” If we fast forward to 1997, we can see that most of the country has already shifted their opinion to disagree, being more in favor of homosexual teachers. The country becomes even stronger in this belief by 2007-2012.
+
+##### Immigration: Prompt: “We should restrict and control people coming into our country to live more than we do now” 
+
+We were very surprised to find that each state’s views on immigration, on average, have remained relatively stable. The average score for each state generally tends to be above 0 and near 1, which indicates agreement with the statement that we need more controls over immigration.
+
+
+##### Race: Prompt: “I think it’s alright for blacks and whites to date each other"
+
+We see significant attitude change over time on this question. At the beginning, the northeast and the west coast were in favor, while the southeast was against. By 1997-2002, all states on average were above neutral to that statement.
+
+##### Religion: “I never doubt the existence of God” 
+Interestingly, we found that the views of the country are fairly stable here over time. We see more confident average belief in God in the southeast (AL, OK,SC) than on the coasts, but overall the average sentiment stays consistently over 1. The question “prayer is an important part of my daily life” exhibits a similar pattern.
+
+##### Gender Roles: Prompt: “Women should return to their traditional roles in society” 
+We see that initially, all states (except Wyoming) disagreed with the sentiment that women should return to their initial roles in society. Yet over time, you can see that this disagreement becomes more and more stark.
+
+##### Perception of Views changing:
+
+Another unexpected finding was that the nation’s views have changed significantly over time, yet people in general do not realize the degree to which their views are current. Specifically, in response to the prompt, “I have old-fashioned views,” almost all states consistently have an average score of around 1, indicating that many people identify as having old-fashioned views. And yet, much of the data suggests that these respondents’ views are current and different from the zeitgeist of earlier years. For example, we see very different responses from respondents in the first few years of the survey versus the last few years of the survey on whether blacks and whites can date, or whether it is okay to have a teacher be homosexual, or whether women should return to their traditional roles in society, yet those same respondents in later years believe their views to be old fashioned.
+
+
+## II. Breakdown by Religion
+If we facet by religion, we can identify certain trends. One very interesting finding we discovered was that in many questions, Jews are similar to people with no religion at all. For example, in response to the prompt “I never doubt the existence of God” Jews tend to follow the same God-doubting trend as people with no religion at all, while the rest of the religions do not share this pattern. The same held for “Prayer is an important part of my daily life.” We were surprised that this held consistently over the years, despite the relatively small sample size of Jews.
+On some questions, the opinions of religions were very different from one another. For example, on the question of immigration, Jews and Muslims were far more pro-immigration than Christians. However, on other questions, religion did not matter as much. For example, in response to the prompt, “I think it’s all right for blacks and whites to date one another,” all groups have very similar breakdowns. As society becomes more accepting of interracial dating, we see a uniform shifting of attitude across all groups.
+For some prompts, we uncovered trends that surprised us. For example, in response to the prompt “AIDS is God’s punishment for immoral behavior,” Muslims and Mormons agree with this significantly more than Christians do.
+Along these lines, in response to the prompt, “School boards ought to have the right to hire teachers who are known homosexuals,” we found that Mormans have significantly more anti-homosexual-teacher views from other religious groups, including Protestants and Catholics. Here, too, Jews followed the trends of those with no religion. Below is an interactive plot of the data. 
+
+## Note:
+The interactive version within the R notebook does not update quickly. The full, faster version is hosted at: https://cdepeuter.shinyapps.io/pew_social_values/.
+
+
+
+```{r}
+
+
+state_name <- tolower(state.name)
+state_abb <- state.abb
+answer_order <- c("relig", "Completely disagree", "Mostly disagree", "Mostly agree", "Completely agree")
+age_answer_order <- c("age_bin", "Completely disagree", "Mostly disagree", "Mostly agree", "Completely agree")
+# DC is included in the data, so add a mapping for that so it doesnt show NA, even though
+# its too small to really show on the map
+state_name <- c(state_name[1:7], "district of columbia", state_name[8:length(state_name)])
+state_abb <- c(state_abb[1:7], "DC", state_abb[8:length(state_abb)])
+
+
+# create mapping
+names(state_name) <- state_abb
+religions <- unique(pew$relig)
+religions <- religions[!is.na(religions)]
+
+
+# convert answers to integers
+answer_vals <- c(1,-2,2,-1,0,NA_integer_)
+names(answer_vals) <- unique(pew$q16a)
+
+
+
+#function to bin ages
+binage <- function(agevec){
+    newvec <- vector(mode="character", length=length(agevec))
+    ops <- c("18-25", "26-35", "36-45", "46-55", "56-65", "66-75", "76+")
+    newvec[18 <= agevec & agevec <= 25] <- ops[1]
+    newvec[25 < agevec & agevec <= 35] <- ops[2]
+    newvec[35 < agevec & agevec <= 45] <- ops[3]
+    newvec[45 < agevec & agevec <= 55] <- ops[4]
+    newvec[55 < agevec & agevec <= 65] <- ops[5]
+    newvec[65 < agevec & agevec <= 75] <- ops[6]
+    newvec[75 < agevec] <- ops[7]
+    return(newvec)
+}
+
+getQuestionAnswer<- function(data, question){
+    
+    if(question == "I never doubt the existence of God"){
+        data$answer <- as.character(data$q16d) 
+    }else if(question == "Prayer is an important part of my daily life"){
+        data$answer <- as.character(data$q16a)
+    }else if(question == "Even today miracles are performed by the power of God"){
+        data$answer <- as.character(data$q16c)
+    }else if(question == "We all will be called before God at the Judgment Day to answer for our sins"){
+        data$answer <- as.character(data$q16b)
+    }else if(question == "We should restrict and control people coming into our country to live more than we do now"){
+        data$answer <- as.character(data$q10n)
+    }else if(question == "Not much in common with other races"){
+        data$answer <- as.character(data$q16s)
+    }else if(question == "I follow politics"){
+        data$answer <- as.character(data$q16x) 
+    }else if(question == "I think it's all right for blacks and whites to date each other"){
+        data$answer <- as.character(data$q10k) 
+    }else if(question == "In the past few years there hasn't been much real improvement in the position of black people in this country"){
+        data$answer <- as.character(data$q10j) 
+    } else if(question == "Discriminations against blacks are rare today"){
+        data$answer <- as.character(data$q10m)   
+    } else if(question == "We should make every possible effort to improve the position of blacks and other minorities, even if it means giving them preferential treatment"){
+        data$answer <- as.character(data$q10l)        
+    } else if(question == "Nazis deserve freedom of speech"){
+        data$answer <- as.character(data$q16h)   
+    } else if(question == "AIDS is God's punishment for immoral behavior"){
+        data$answer <- as.character(data$q16l) 
+    } else if(question == "I have old fashioned views"){
+        data$answer <- as.character(data$q16m) 
+    } else if(question == "Women should return to their traditional roles in society"){
+        data$answer <- as.character(data$q16j)
+    } else if(question == "School boards ought to have the right to fire teachers who are known homosexuals"){
+        data$answer <- as.character(data$q16e)
+    }
+    
+    return(data)
+}
+
+customQuestionFilter <- function(data, question){
+    
+    data <- getQuestionAnswer(data, question)
+
+    data_ <- data %>% group_by(state) %>% summarize(value = sum(answer_vals[answer], na.rm = TRUE) / sum(!is.na(answer)), count = n())
+    data_$region <- state_name[data_$state]
+
+    return(data_)
+}
+
+
+
+getFilteredData <- function(data, years, question, religions){
+    
+    valid_years_ <- seq(years[1], years[2])
+    #print(valid_years_)
+    #print(question)
+    
+    data <- data[data$year %in% valid_years_,]
+    data <- data[data$relig %in% religions,]
+    
+    
+    filtered_data <- customQuestionFilter(data, question)
+    
+    return(filtered_data)
+}
+
+
+religions <- unique(pew$relig)
+religions <- religions[!is.na(religions)]
+
+
+
+
+getQuestionInputs <- function(){
+    qs <- list( 
+             other=c( "School boards ought to have the right to fire teachers who are known homosexuals","I follow politics",
+                    
+             "Nazis deserve freedom of speech", "I have old fashioned views", "Women should return to their traditional roles in society",
+             "We should restrict and control people coming into our country to live more than we do now"), 
+             Religion = c( "I never doubt the existence of God", "Prayer is an important part of my daily life" ,  "AIDS is God's punishment for immoral behavior",
+                           "Even today miracles are performed by the power of God",
+                           "We all will be called before God at the Judgment Day to answer for our sins"), 
+             
+             Race = c( "I think it's all right for blacks and whites to date each other", "Discriminations against blacks are rare today", 
+                       "We should make every possible effort to improve the position of blacks and other minorities, even if it means giving them preferential treatment",
+                       "In the past few years there hasn't been much real improvement in the position of black people in this country",
+            "Not much in common with other races")
+             )
+    
+    return(qs)
+}
+
+    likert_data <- reactive({
+        likertData(pew, input$yearRange, input$question, input$religions)
+    })
+    
+    likert_age_data <- reactive({
+        likertAgeData(pew, input$yearRange, input$question, input$religions)
+    })
+    
+    
+    filteredData <- reactive({
+        getFilteredData(pew, input$yearRange, input$question, input$religions)
+    })
+    
+    output$datatable <- renderTable(filteredData())
+
+
+    output$likert <- renderPlot(plot.likert(relig~., data=likert_data(), as.percent = T, ylab="religion", main= paste("Responses to:",input$question)))
+    output$age_likert <- renderPlot(plot.likert(age_bin~., data=likert_age_data(), as.percent = T, ylab="age", main= paste("Responses to:", input$question)))
+    
+    
+    
+    output$map <- renderPlot({
+        state_choropleth(filteredData(),num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(paste("Responses to:", input$question)) + theme(plot.title = element_text(size = 18))
+            # viridis::scale_fill_viridis() 
+    })
+
+titlePanel("Exploring Social Values with Pew")
+    
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("question", "Question:", getQuestionInputs(), "School boards ought to have the right to fire teachers who are known homosexuals"),
+            checkboxGroupInput("religions", "Religions", religions, religions),
+            sliderInput("yearRange", "Year", 1987, 2012, c(1987, 2012), sep = "")
+        ),
+        
+        mainPanel(
+            tabsetPanel(
+                tabPanel("Map", plotOutput("map"), img(src = "shiny_legend.png",height = 75,  width = 400, class="img_class")),
+                tabPanel("Likert", plotOutput("likert")),
+                tabPanel("Data",  tableOutput("datatable")),
+                tabPanel("About", tags$div(class="about", tags$p("This is a project by Daniel First, Rebecca Peyser, Karl-Loïc Kamdem, and Conrad De Peuter for"),
+            tags$p( "STATGR5702 at Columbia. Our goal was to present the "), tags$a(href="http://www.people-press.org/2012/04/15/1987-2012-values-survey-combined-dataset/", "Pew Values Survey Dataset"),
+            tags$p("so people could see how the general views of different religions, regions and age groups have changed throughout time.")))
+            )
+        )
+        
+    )
+
+```
+
+
+
+As a first exploratory stage in the analysis, we subsetted the dataset by religion, in order to explore whether religions had different trends of value change over time. As you can see below, in response to question X, Jews have a different trend of value change than non-Jews. The y axis shows average score, and the x axis shows year.
+
+
+
+```{python}
+## commenting out the code since the python version this was run on and the one on the computer creating RMD are different and causing conflicts
+#  for COL in array:
+#    print(COL)
+    #everyone
+#    print("All Religions:")
+#    DF=pew_replaced[COL]
+#    DF=DF.dropna(axis=0,how='any')
+#    sums = DF.groupby(pew_replaced.year).sum()
+#    counts = DF.groupby(pew_replaced.year).count()
+#    plt.title("for all Religions:")
+#    plt.figure(figsize=(14, 8))
+#    (sums/counts).plot(figsize=(18, 4))
+#    plt.xticks(range(1987, 2013))
+#    plt.grid()
+#    plt.show()
+    #Jews
+#    print("Jews:")
+#    DF_jew=Jews[COL]
+#    DF_jew=DF_jew.dropna(axis=0,how='any')
+#    sums = DF_jew.groupby(pew_replaced.year).sum()
+#    counts = DF_jew.groupby(pew_replaced.year).count()
+#    plt.title("for Jews:")
+#    plt.figure(figsize=(14, 8))
+#    (sums/counts).plot(figsize=(18, 4))
+#    plt.xticks(range(1987, 2013))
+#    plt.grid()
+#    plt.show()
+    #NonJews
+#    print("Non-Jews")
+#    DF_nonjew=nonJews[COL]
+#    DF_nonjew=DF_nonjew.dropna(axis=0,how='any')
+#    sums_b = DF_nonjew.groupby(pew_replaced.year).sum()
+#    counts_b = DF_nonjew.groupby(pew_replaced.year).count()
+#    plt.title("for non-Jews:")
+#    plt.figure(figsize=(14, 8))
+#    (sums_b/counts_b).plot(figsize=(18, 4))
+#    plt.xticks(range(1987, 2013))
+#    plt.grid()
+#    plt.show()
+```
+
+
+
+![](jewish_opinion.png)
+![](goy_opinion.png)
+
+
+
+
+
+# Main Analysis
+In this section, we will first describe two main graph types that we employed, and what calculations and manipulations we used to produce them. Then, we will go through question by question and use the graphs to bring out interesting trends from the data.
+
+
+## Graph Type 1: Change in Attitude over time
+In a very preliminary stage of our analysis, we wanted to explore how peoples’ views on the prompts changed over time, and whether these trends were different for different religious groups. In order to do this, we devised a very basic line plot over time. In this line plot, which we wrote in python code, the x axis is year, and the y axis is the average score, ranging from -2 to 2, as explained shortly below.
+
+
+
+However, a deficiency of these graphs is that we cannot see the overall counts for how many e.g. Jews responded to any given prompt. Further, it is difficult to examine multiple religions all at once. Finally, though averages were reported, we could not see the breakdown of % completely agree vs. disagree, etc., as we will explain shortly. In order to correct for these deficiencies, we created Likert graphs, which are Graph Type 3 below. 
+
+This inspired us to investigate further and in more detail.
+
+
+## Graph Type 2: Main Effects by Geographic Location
+In the following plots we set out to explore how opinions about race, religion, and other sociopolitical topics vary by state and with time in America. We chose to visualize this data as colors on a map so that the viewer can quickly internalize the average leanings of different areas of the country. Presenting this data in a bar chart or table would certainly not give the viewer the same intuition for the effect of geography. We chose a diverging color scale, because the answers range between “Strongly disagree,” “Mostly disagree,” “Don’t know,” “Mostly agree,” and “Strongly agree.” Each of the possible answers was assigned an integer value between -2 and 2, respectively, and the value displayed is the average of the responses for each state. In the following section we chose selected topics for which we found the data especially interesting. For each topic, we will show a snapshot of a five year range to capture the feelings in the country at that time. We don’t show every possible five year range, as that would include an unwieldy number of graphs, but we include enough to portray changing opinions over time.
+
+For example, in response to the prompt “school boards ought to have the right to fire teachers who are known homosexuals.” As can be seen, in California and the Northeast, people on average strongly disagree with this prompt. Yet in Wyoming and Mississippi, the average response is above 0, indicating lukewarm neutrality.
+
+```{r}
+
+question.txt <- "School boards ought to have the right to fire teachers who are known homosexuals"
+
+data_ <- getFilteredData(pew, c(1987, 2012), question.txt, religions)
+
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(paste("Responses to:", question.txt)) + theme(plot.title = element_text(size = 18))
+
+```
+
+
+## Main Effects by Religious and Age Groups
+
+We explored how the answers to questions about religion varied between people of different religions and of different ages. Because these questions are answered on a rating scale (“strongly agree” to “strongly disagree”), a likert plot, also known as a diverging stacked barplot, is an appropriate way to visualize the data. We use a diverging color scale in these plots - with red representing disagreement and blue representing agreement - to help viewers quickly identify the leanings of each group.
+
+
+```{r}
+library(foreign)
+library(dplyr)
+library(tidyr)
+library(HH)
+
+
+##q16a
+question.txt <- "Prayer is an Important Part of my Daily Life"
+
+x <- pew %>% dplyr::select(respid, year, state, q16a, sex, age, race, relig) %>% filter(!(is.na(q16a))) %>% filter(!(is.na(relig)))
+x2 <- x %>% dplyr::select(relig, q16a) %>% group_by(relig, q16a) %>% summarise(n()) %>% spread(key = q16a, value = `n()`) 
+x2
+x2 <- x2 %>% dplyr::select(-DK) #removing DK variable
+x2 <- x2[c(1,5,4,3,2)] #rearrange so responses go in right order
+x2
+plot.likert(relig~., data=x2, as.percent = T, ylab="religion", main= paste("Responses to:", question.txt))
+
+
+
+
+
+```
+
+
+Before moving on to specific questions, we will use one graph as an example in which to explain how we made the graph and what it aims to show. 
+The above figure shows the breakdown, in terms of percentages, of answers to the question “prayer is an important part of my daily life” within different religious groups. Any survey participant with an “NA” response to this question or in the religion column was removed prior to analysis, as well as those who refused to disclose their religion or responded “don’t know” about their religion. Additionally, respondents who answered “don’t know” to this question are not displayed. Notably, Judaism is the outlier as compared to other religions for this question. A larger percentage of Jews surveyed disagree with this statement than that of other religions surveyed, to the extent that the distribution of responses among Jews looks more similar to the distribution for non-religious respondents (bottom-most bar) than to the distribution for other religions. We chose to show percentages, rather than raw numbers, in the likert plot so that responses could be compared across religions. The right axis displays the total number of responses for each religion.
+
+Next, we were curious to investigate to what extent age influences the answer to this question.
+
+
+```{r}
+x3 <- x %>% dplyr::select(age, q16a) %>% filter(!is.na(age)) %>% mutate(age_bin = binage(age)) %>% dplyr::select(-age) %>% group_by(age_bin, q16a) %>% summarise(n()) %>% spread(key = q16a, value = `n()`)
+x3 <- x3 %>% dplyr::select(-DK) #removing DK variable
+x3
+x3 <- x3[c(1,5,4,3,2)] #rearrange so responses go in right order
+
+plot.likert(age_bin~., data=x3, as.percent = T, ylab="age", main= paste("Responses to:", question.txt))
+
+
+```
+
+
+
+The above plot portrays that for the surveyed population, prayer is increasingly an important part of people’s lives as we move to higher age brackets. To investigate if this is true across religions, we faceted the plot by religion. It turns out that this trend of importance of prayer increasing with age is true among Protestant and Catholic respondents, who make up the majority of the surveyed population, but not among other religious groups (Catholic, Protestant, and Jewish facets displayed below. Like shown in the Jewish facet, for other religions too age did not clearly correlate with response). In order to generate this plot we needed to bin the ages into discrete groups. The bins try to capture an age group; they are mostly uniform in size, except for the youngest bracket which captures the “young adult” group ages 18-25, and the oldest bracket which pools anyone age 76 and above. The age brackets are explicitly written on the left side of the y-axis, while the number of respondents in each bin is written on the right side of the y-axis, both important information to be written explicitly for the viewer to properly interpret the plot. 
+
+
+```{r}
+x4 <- x %>% filter(!is.na(age)) 
+x4 <- x4 %>% mutate(age_bin = binage(age)) %>% dplyr::select(age_bin, relig, q16a) %>% group_by(age_bin, relig, q16a) %>% summarise(n()) %>% spread(key = q16a, value = `n()`) %>% filter(relig!="DK/Ref")
+x4 <- dplyr::select(x4, -DK)
+x4 <- x4[c(1,2,6,5,4,3)]
+
+#Protestant
+this.relig <- names(table(x4$relig))[1]; x5 <- x4 %>% filter(relig==this.relig) %>% ungroup %>% dplyr::select(-relig); x5[is.na(x5)] <- 0; plot.likert(age_bin~., data=x5, as.percent = T, ylab="age", main = paste(this.relig, "Respondents"));
+#Catholic
+this.relig <- names(table(x4$relig))[2]; x5 <- x4 %>% filter(relig==this.relig) %>% ungroup %>% dplyr::select(-relig); x5[is.na(x5)] <- 0; plot.likert(age_bin~., data=x5, as.percent = T, ylab="age", main = paste(this.relig, "Respondents"));
+#Jewish
+this.relig <- names(table(x4$relig))[3]; x5 <- x4 %>% filter(relig==this.relig) %>% ungroup %>% dplyr::select(-relig); x5[is.na(x5)] <- 0; plot.likert(age_bin~., data=x5, as.percent = T, ylab="age", main = paste(this.relig, "Respondents"));
+
+
+
+
+```
+
+We will now turn to specific questions and show how our graphs were used to illuminate interesting trends.
+
+
+## Homosexuality
+
+People’s attitude towards whether they are open to homosexual teachers has shifted significantly over time. Except the west coast and the northeast, the country generally agreed with the sentiment that “school boards ought to have the right to fire teachers who are known homosexuals.” 
+
+
+```{r}
+question.txt <- "School boards ought to have the right to fire teachers who are known homosexuals"
+
+
+data_ <- getFilteredData(pew, c(1987, 1992), question.txt, religions)
+
+state_choropleth(data_, num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1987-1992") + theme(plot.title = element_text(size = 18))
+
+```
+
+
+If we fast forward to 1997, we can see that most of the country has already shifted their opinion to disagree.
+
+
+```{r}
+
+
+data_ <- getFilteredData(pew, c(1997, 2002), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1997-2002") + theme(plot.title = element_text(size = 18))
+
+```
+
+
+The country becomes even stronger in this belief by 2007-2012:
+
+
+
+```{r}
+likertData <- function(data,  years, question, religions){
+
+    valid_years_ <- seq(years[1], years[2])
+    #print(valid_years_)
+    #print(question)
+    
+    data <- data[data$year %in% valid_years_,]
+    data <- data[data$relig %in% religions,]
+    
+    data <- getQuestionAnswer(data, question)
+    
+    x <- data %>% dplyr::select(respid, year, state, answer, sex, age, race, relig) %>% filter(!(is.na(answer))) %>% filter(!(is.na(relig)))
+    x2 <- x %>% dplyr::select(relig, answer) %>% group_by(relig, answer) %>% dplyr::summarize(n()) %>% spread(key = answer, value = `n()`)
+    x2
+    x2 <- x2 %>% dplyr::select(-DK) #removing DK variable
+    x2 <- x2[answer_order] #rearrange so responses go in right order
+    x2[is.na(x2)] <- 0
+
+    
+    return(x2) 
+}
+
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("2007-2012") + theme(plot.title = element_text(size = 18))
+
+
+```
+
+
+If we facet by religion, we see that Jews and people with no religion have a very high percentage disagreement with this prompt, while the highest percentages of strong agreement come from Protestant and Mormons. 
+
+```{r}
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, c("Jewish", "No/None"))
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("Jews and no Religion") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, c("Protestant", "Mormon"))
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("Protestants & Mormons") + theme(plot.title = element_text(size = 18))
+
+
+lk_data <- likertData(pew, c(1987, 2012), question.txt, religions)
+plot.likert(relig~., data=lk_data, as.percent = T, ylab="religion", main= "1987-2012")
+```
+
+
+## Question: I have old fashioned views
+
+```{r}
+
+
+question.txt <- "I have old fashioned views"
+
+
+data_ <- getFilteredData(pew, c(1987, 1992), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1987-1992") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(1997, 2002), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1997-2002") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(" 2007-2012") + theme(plot.title = element_text(size = 18))
+
+
+lk_data <- likertData(pew, c(1987, 2012), question.txt, religions)
+plot.likert(relig~., data=lk_data, as.percent = T, ylab="religion", main= "1987-2012")
+
+```
+
+
+
+
+
+## Question: Women should return to their traditional roles in society:
+
+```{r}
+
+question.txt <- "Women should return to their traditional roles in society"
+
+
+data_ <- getFilteredData(pew, c(1987, 1992), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1987-1992") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(1997, 2002), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1997-2002") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(" 2007-2012") + theme(plot.title = element_text(size = 18))
+
+
+lk_data <- likertData(pew, c(1987, 2012), question.txt, religions)
+plot.likert(relig~., data=lk_data, as.percent = T, ylab="religion", main= "1987-2012")
+```
+
+
+
+## Question: We should restrict and control people coming into our country to live more than we do now
+
+
+We were very surprised to find that in general, the views of the country as a whole have not changed so much, generally stable between .50 and 1.00. We were surprised that even in states that are liberal in other questions (such as womens’ roles), there is a positive sentiment behind 
+
+```{r}
+
+question.txt <- "We should restrict and control people coming into our country to live more than we do now"
+
+
+data_ <- getFilteredData(pew, c(1987, 1992), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1987-1992") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(1997, 2002), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1997-2002") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(" 2007-2012") + theme(plot.title = element_text(size = 18))
+
+
+lk_data <- likertData(pew, c(1987, 2012), question.txt, religions)
+plot.likert(relig~., data=lk_data, as.percent = T, ylab="religion", main= "1987-2012")
+
+```
+
+
+# Religion
+
+## Question: We all will be called before God at Judgment Day to answer for our sins
+
+Interestingly, even though the country as a whole seemed to be more in favor of more control over immigration, when we break this down by religion we see that Jews and Muslims actually have higher percentage in favor of less control over immigration compared to other groups.
+```{r}
+
+question.txt <- "We all will be called before God at the Judgment Day to answer for our sins"
+
+
+data_ <- getFilteredData(pew, c(1987, 1992), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1987-1992") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(1997, 2002), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1997-2002") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(" 2007-2012") + theme(plot.title = element_text(size = 18))
+
+
+lk_data <- likertData(pew, c(1987, 2012), question.txt, religions)
+plot.likert(relig~., data=lk_data, as.percent = T, ylab="religion", main= "1987-2012")
+
+```
+
+## Question: I never doubt the existence of God
+
+Interestingly, we found that the views of the country are fairly stable here over time. We see more confident average belief in God in the southeast (AL, OK,SC) than on the coasts, but overall the average sentiment stays consistently over 1. 
+
+The question “prayer is an important part of my daily life” exhibits a similar pattern.
+
+
+```{r}
+
+question.txt <- "I never doubt the existence of God"
+
+
+data_ <- getFilteredData(pew, c(1987, 1992), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1987-1992") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(1997, 2002), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1997-2002") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(" 2007-2012") + theme(plot.title = element_text(size = 18))
+
+
+lk_data <- likertData(pew, c(1987, 2012), question.txt, religions)
+plot.likert(relig~., data=lk_data, as.percent = T, ylab="religion", main= "1987-2012")
+
+```
+
+
+
+
+
+
+
+## Question: I think it’s all right for blacks and whites to date each other. 
+```{r}
+
+question.txt <- "I think it's all right for blacks and whites to date each other"
+
+
+data_ <- getFilteredData(pew, c(1987, 1992), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1987-1992") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(1997, 2002), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle("1997-2002") + theme(plot.title = element_text(size = 18))
+
+
+data_ <- getFilteredData(pew, c(2007, 2012), question.txt, religions)
+
+
+state_choropleth(data_,num_colors = 1)  +  scale_fill_gradient2(low = "red",mid="white", high="dodgerblue") + guides(fill=FALSE) +
+            ggtitle(" 2007-2012") + theme(plot.title = element_text(size = 18))
+
+
+lk_data <- likertData(pew, c(1987, 2012), question.txt, religions)
+plot.likert(relig~., data=lk_data, as.percent = T, ylab="religion", main= "1987-2012")
+
+```
+
+
+# Conclusion
+
+Our analyses helped us see the benefits and costs of visualization techniques in exploratory data analyses environments. Our results both complicated pre-conceived notions we had regarding the spread of value-responses across the nation as well as across religions, and suggested new modes of thinking about the values of America as they change over time and split across religious lines. Though for some responses we were very surprised that views had not changed - e.g. with respect to immigration and whether people thought that they held old-fashioned views - for others it was fascinating to see how much opinion has shifted. We observed especially significant shift of attitude in the realms of gender roles as well as race relations, both in the more progressive direction. We were surprised that across the various questions we studied, the average values per state tended not to become more conservative.
+
+Limitations and future directions: Our study had various limitations. First of all, some people were surveyed multiple times, and it would have been interesting to examine how specific peoples’ opinions have changed over time. Further, even though we did uncover various trends of change over time, it would have been ideal if could do further analyses to investigate whether attitude shifts are mediated by birth year, or whether alternatively shifts occur for everyone across time. Further, our study mainly examined religions not across time, and a further study could investigate how religious values have changed over time.
+
+Another limitation of our study is that we do not split based on liberals vs. conservatives. We also are generally looking at the average value, e.g. in a given state. This leaves open the possibility that many responses are become more and more polarized between conservatives and liberals, yet the average value remains the same. This could have hidden certain trends within political affiliations, ones that future analyzes of within-conservative and within-liberal groups could have revealed.
+
+One particularly salient implication of our study is the observation that on questions of immigration, the country’s attitude has not changed much on average. This is important to bring out, because someone might justifiably think that the country as a whole is, on average, far more liberal today than in the past. Our analysis shows that this is a justified conclusion in the cases of race relations and gender roles and with respect to homosexuality, yet it would be unwarranted with respect to immigration. This raises the possibility for future exploration: are there many citizens whose values are progressive on many social issues yet not on immigration? And if so, does this suggest that there are some people who ascribe to liberalism in terms of lifestyle but not in terms of concern for people outside the country?
+
+Understanding our country’s values is as important now as ever. As we move forward, we can only hope that greater understanding of the values of our country can give us more self-knowledge and awareness. Only with data and with knowledge can we hope to move forward to arrive at the values appropriate and best-suited for the 21st-century.
+
+
